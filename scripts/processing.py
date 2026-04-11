@@ -135,3 +135,18 @@ def fit_transform_preprocessor(preprocessor: ColumnTransformer, X_train: pd.Data
     )
 
     return pd.DataFrame(X_train_transformed), pd.DataFrame(X_test_transformed), preprocessor
+
+
+def transform_preprocessor(preprocessor: ColumnTransformer, X: pd.DataFrame) -> pd.DataFrame:
+    """
+    Apply a fitted preprocessor to new rows (inference only).
+
+    Uses transform() — no refit — so one-hot columns match training.
+    """
+    X_transformed = preprocessor.transform(X)
+    logger.info(
+        "PROCESS DATA : Inference transform | input=%s | output=%s",
+        X.shape,
+        getattr(X_transformed, "shape", None),
+    )
+    return pd.DataFrame(X_transformed)

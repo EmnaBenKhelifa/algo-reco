@@ -20,6 +20,7 @@ airflow:
     - pool_name:
       pool_slot:
       pool_description:
+  # Used by inference_pipeline_dag — JSON array of YYYY-MM-DD strings.
   variables:
-    - variable_name:
-      variable_value:
+    - variable_name: INGESTION_DATES
+      variable_value: '["2023-12-22", "2023-12-23"]'

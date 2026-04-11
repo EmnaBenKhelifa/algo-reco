@@ -24,7 +24,8 @@ from scripts.processing import (
     select_features,
     temporal_train_test_split,
     build_preprocessor,
-    fit_transform_preprocessor
+    fit_transform_preprocessor,
+    transform_preprocessor,
 )
 
 logger = logging.getLogger(__name__)
@@ -51,16 +52,22 @@ def processing_dag():
         dag_run = context.get("dag_run")
         conf = dag_run.conf if dag_run else {}
 
+        # Same keys as dag_run.conf — downstream tasks use INGESTION_MODE / INGESTION_DATES
         return {
-            "MODE": conf.get("INGESTION_MODE", "inference"),
-            "DATES": conf.get("INGESTION_DATES", []),
+            "INGESTION_MODE": conf.get("INGESTION_MODE", "inference"),
+            "INGESTION_DATES": conf.get("INGESTION_DATES", []),
         }
 
     # ------------------------------------------------
     # 2. TRAIN MODE — train/test split
     # ------------------------------------------------
     @task
-    def train_split(features_table_name: str):
+    def train_split(conf: dict):
+        if conf.get("INGESTION_MODE", "inference") != "train":
+            logger.info("[PROCESSING] Skip train_split (not in train mode)")
+            return "skipped"
+
+        features_table_name = "features_train"
         project_id = ingestion.project_id
         dataset_id = ingestion.dataset_id
 
@@ -98,7 +105,11 @@ def processing_dag():
     # 3. TRAIN MODE — preprocessing
     # ------------------------------------------------
     @task
-    def train_preprocessing():
+    def train_preprocessing(conf: dict):
+        if conf.get("INGESTION_MODE", "inference") != "train":
+            logger.info("[PROCESSING] Skip train_preprocessing (not in train mode)")
+            return "skipped"
+
         features_dict = load_data_gcs(
             "gs://algo_reco/features/train/features.json"
         )
@@ -131,28 +142,36 @@ def processing_dag():
     # 4. INFERENCE MODE — preprocessing per date
     # ------------------------------------------------
     @task
-    def inference_preprocessing(dates: list):
+    def inference_preprocessing(conf: dict):
+        if conf.get("INGESTION_MODE", "inference") == "train":
+            logger.info("[PROCESSING] Skip inference_preprocessing (train mode)")
+            return "skipped"
+
+        dates = conf.get("INGESTION_DATES", [])
         if not dates:
             raise ValueError("INFERENCE mode requires INGESTION_DATES")
 
-        features_dict = load_data_gcs(
-            "gs://algo_reco/features/train/features.json"
-        )
+        project_id = ingestion.project_id
+        dataset_id = ingestion.dataset_id
+
         preprocessor = load_data_gcs(
             "gs://algo_reco/features/train/preprocessor.joblib"
         )
+
+        features_num, features_cat = get_feature_lists()
 
         for ds in dates:
             ds_table = ds.replace("-", "_")
             logger.info(f"[PROCESSING] Inference for {ds}")
 
-            X = load_data_gcs(
-                f"gs://algo_reco/features/inference/features_inference_{ds}.csv"
+            features_full = load_data_bq(
+                project_id,
+                dataset_id,
+                f"features_inference_{ds_table}",
             )
+            X = select_features(features_full, features_num, features_cat)
 
-            X_t, _, _ = fit_transform_preprocessor(
-                preprocessor, X, X
-            )
+            X_t = transform_preprocessor(preprocessor, X)
 
             dump_data_gcs(
                 X_t,
@@ -167,15 +186,13 @@ def processing_dag():
     # ------------------------------------------------
     conf = read_conf()
 
-    train_split_task = train_split("features_dataset")
-    train_preprocess_task = train_preprocessing()
+    train_split_task = train_split(conf)
+    train_preprocess_task = train_preprocessing(conf)
+    inference_task = inference_preprocessing(conf)
 
-    inference_task = inference_preprocessing(conf["DATES"])
-
-    # Conditional routing
     train_split_task >> train_preprocess_task
-    conf >> inference_task
     conf >> train_split_task
+    conf >> inference_task
 
 
 # Instantiate DAG
