@@ -1,8 +1,10 @@
-astro
 .git
-.env
-airflow_settings.yaml
-logs/
 .venv
-airflow.db
-airflow.cfg
+venv
+__pycache__
+*.py[cod]
+.pytest_cache
+.mypy_cache
+.cursor
+*.egg-info
+.DS_Store

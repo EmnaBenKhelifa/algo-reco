@@ -134,6 +134,10 @@ celerybeat.pid
 # SageMath parsed files
 *.sage.py
 
+# Google Cloud — clés de compte de service (ne pas versionner)
+config/team-shared-sa.json
+config/*-sa.json
+
 # Environments
 .env
 .envrc

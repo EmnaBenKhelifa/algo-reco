@@ -1,0 +1,18 @@
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - -f
+      - deploy/docker/dashboard/Dockerfile
+      - -t
+      - gcr.io/$PROJECT_ID/streamlit-dashboard:${_TAG}
+      - .
+
+images:
+  - gcr.io/$PROJECT_ID/streamlit-dashboard:${_TAG}
+
+substitutions:
+  _TAG: latest
+
+options:
+  logging: CLOUD_LOGGING_ONLY

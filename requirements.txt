@@ -16,3 +16,10 @@ catboost
 scipy
 numpy
 jinja2
+# Dashboard + predictions API
+streamlit
+plotly
+httpx
+fastapi
+uvicorn[standard]
+pytest
